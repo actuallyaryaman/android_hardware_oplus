@@ -3,7 +3,6 @@ package org.voltageos.separatesound
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
 import android.os.IBinder

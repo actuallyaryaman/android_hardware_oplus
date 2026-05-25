@@ -2,13 +2,10 @@ package org.voltageos.separatesound
 
 import android.app.AlertDialog
 import android.content.Context
-import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.os.Bundle
-import android.util.Log
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.preference.PreferenceManager
 import androidx.preference.SwitchPreference
 
 class SeparateSoundSettingsFragment : PreferenceFragmentCompat() {
