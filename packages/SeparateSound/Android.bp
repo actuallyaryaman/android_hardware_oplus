@@ -1,5 +1,6 @@
 android_app {
     name: "SeparateSound",
+    defaults: ["SettingsLibDefaults"],
 
     srcs: ["src/**/*.kt"],
     resource_dirs: ["res"],
@@ -12,7 +13,6 @@ android_app {
     static_libs: [
         "androidx.core_core",
         "androidx.preference_preference",
-        "com.android.settingslib.collapsingtoolbar",
     ],
 
     optimize: {
