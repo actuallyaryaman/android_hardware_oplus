@@ -1,6 +1,8 @@
 package org.voltageos.separatesound
 
+import android.content.Context
 import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.IBinder
 import android.os.ServiceManager
 import android.util.Log
@@ -8,6 +10,8 @@ import android.util.Log
 object AudioRoutingHelper {
     private const val TAG = "AudioRoutingHelper"
     private var audioService: Any? = null
+    private var mediaStrategy: Any? = null
+    private var speakerDevice: AudioDeviceInfo? = null
 
     private fun getAudioService(): Any? {
         if (audioService != null) return audioService
@@ -22,6 +26,13 @@ object AudioRoutingHelper {
             Log.e(TAG, "Failed to get IAudioService", e)
             null
         }
+    }
+
+    fun init(ctx: Context) {
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        speakerDevice = findSpeakerDevice(am)
+        mediaStrategy = findMediaStrategy(am)
+        Log.d(TAG, "init: speakerDevice=$speakerDevice mediaStrategy=$mediaStrategy")
     }
 
     fun setUidDeviceAffinity(uid: Int, deviceType: Int, address: String): Boolean {
@@ -69,27 +80,59 @@ object AudioRoutingHelper {
         }
     }
 
-    fun setUidDeviceAffinityForPackage(
-        packageName: String,
-        deviceType: Int,
-        address: String
-    ): Boolean {
-        val uid = getUidForPackage(packageName) ?: return false
-        return setUidDeviceAffinity(uid, deviceType, address)
-    }
-
-    fun removeUidDeviceAffinityForPackage(packageName: String): Boolean {
-        val uid = getUidForPackage(packageName) ?: return false
-        return removeUidDeviceAffinity(uid)
-    }
-
-    private fun getUidForPackage(pkg: String): Int? {
+    fun forceDefaultToSpeaker(ctx: Context): Boolean {
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val strategy = mediaStrategy ?: findMediaStrategy(am) ?: return false
+        val speaker = speakerDevice ?: findSpeakerDevice(am) ?: return false
         return try {
-            val pm = android.app.AppGlobals.getInitialApplication()
-                .packageManager
-            pm.getApplicationInfo(pkg, 0).uid
+            val method = am.javaClass.getMethod(
+                "setPreferredDeviceForStrategy",
+                Class.forName("android.media.AudioProductStrategy"),
+                AudioDeviceInfo::class.java
+            )
+            method.invoke(am, strategy, speaker) as Boolean
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to get UID for package $pkg", e)
+            Log.e(TAG, "forceDefaultToSpeaker failed", e)
+            false
+        }
+    }
+
+    fun restoreDefaultRouting(ctx: Context): Boolean {
+        val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val strategy = mediaStrategy ?: findMediaStrategy(am) ?: return false
+        return try {
+            val method = am.javaClass.getMethod(
+                "setPreferredDeviceForStrategy",
+                Class.forName("android.media.AudioProductStrategy"),
+                AudioDeviceInfo::class.java
+            )
+            method.invoke(am, strategy, null) as Boolean
+        } catch (e: Exception) {
+            Log.e(TAG, "restoreDefaultRouting failed", e)
+            false
+        }
+    }
+
+    private fun findSpeakerDevice(am: AudioManager): AudioDeviceInfo? {
+        val devices = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        return devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+    }
+
+    private fun findMediaStrategy(am: AudioManager): Any? {
+        return try {
+            val getStrategies = am.javaClass.getMethod("getAudioProductStrategies")
+            val strategies = getStrategies.invoke(am) as? List<*> ?: return null
+            for (strategy in strategies) {
+                if (strategy == null) continue
+                val getLegacyType = strategy.javaClass.getMethod("getLegacyStreamType")
+                val legacyType = getLegacyType.invoke(strategy) as? Int ?: continue
+                if (legacyType == android.media.AudioManager.STREAM_MUSIC) {
+                    return strategy
+                }
+            }
+            strategies.firstOrNull()
+        } catch (e: Exception) {
+            Log.w(TAG, "findMediaStrategy failed", e)
             null
         }
     }

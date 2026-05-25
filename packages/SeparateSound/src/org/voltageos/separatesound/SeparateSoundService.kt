@@ -22,6 +22,7 @@ class SeparateSoundService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        AudioRoutingHelper.init(this)
         Log.d(TAG, "Service created")
     }
 
@@ -105,14 +106,20 @@ class SeparateSoundService : Service() {
         val uid = getUidForPackage(pkg) ?: return
         targetAppUid = uid
 
+        AudioRoutingHelper.forceDefaultToSpeaker(this)
         val success = AudioRoutingHelper.setUidDeviceAffinity(uid, deviceType, address)
         Log.d(TAG, "applyRouting: pkg=$pkg uid=$uid type=$deviceType addr=$address success=$success")
     }
 
     private fun clearRouting() {
-        val uid = targetAppUid ?: return
-        val success = AudioRoutingHelper.removeUidDeviceAffinity(uid)
-        Log.d(TAG, "clearRouting: uid=$uid success=$success")
+        val uid = targetAppUid ?: run {
+            val pkg = RouteStore.getSelectedPackage(this)
+            if (pkg != null) getUidForPackage(pkg) else null
+        } ?: return
+
+        AudioRoutingHelper.removeUidDeviceAffinity(uid)
+        AudioRoutingHelper.restoreDefaultRouting(this)
+        Log.d(TAG, "clearRouting: uid=$uid")
         targetAppUid = null
         previousWasActive = false
     }
