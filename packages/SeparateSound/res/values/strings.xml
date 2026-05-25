@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Separate Sound</string>
+    <string name="settings_title">Separate Sound</string>
+    <string name="settings_summary">Per-app audio output routing</string>
+    <string name="tile_label">Separate Sound</string>
+
+    <string name="enable_title">Use Separate Sound</string>
+    <string name="enable_summary">Route selected app\'s audio to a different output device</string>
+
+    <string name="selected_app_title">Audio source</string>
+    <string name="selected_app_summary">App to route to alternate device</string>
+    <string name="no_app_selected">None selected</string>
+
+    <string name="selected_device_title">Output device</string>
+    <string name="selected_device_summary">Device for the selected app\'s audio</string>
+
+    <string name="app_picker_title">Choose app</string>
+    <string name="device_picker_title">Choose device</string>
+
+    <string name="device_speaker">Built-in Speaker</string>
+    <string name="device_wired_headset">Wired Headset</string>
+    <string name="device_wired_headphones">Wired Headphones</string>
+    <string name="device_bluetooth_a2dp">Bluetooth</string>
+    <string name="device_usb_headset">USB Audio</string>
+    <string name="device_hdmi">HDMI</string>
+    <string name="device_dock">Dock</string>
+    <string name="device_default">Default</string>
+
+    <string name="status_enabled">Separate Sound is active — %1$s → %2$s</string>
+    <string name="status_disabled">Separate Sound is off</string>
+    <string name="status_no_app">No app selected for separate routing</string>
+    <string name="status_app_not_running">%1$s is not currently playing audio</string>
+
+    <string name="tile_dialog_title">Separate Sound</string>
+    <string name="tile_dialog_message">Tap to open settings</string>
+    <string name="tile_dialog_open">Open settings</string>
+
+    <string name="notification_channel">Separate Sound</string>
+</resources>

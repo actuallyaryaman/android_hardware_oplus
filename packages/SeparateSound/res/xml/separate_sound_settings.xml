@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <SwitchPreference
+        android:key="enable_separate_sound"
+        android:title="@string/enable_title"
+        android:summary="@string/enable_summary" />
+
+    <PreferenceCategory android:title="Routing">
+        <Preference
+            android:key="selected_app"
+            android:title="@string/selected_app_title"
+            android:summary="@string/no_app_selected" />
+
+        <Preference
+            android:key="selected_device"
+            android:title="@string/selected_device_title"
+            android:summary="@string/selected_device_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Status">
+        <Preference
+            android:key="status"
+            android:selectable="false" />
+    </PreferenceCategory>
+</PreferenceScreen>
