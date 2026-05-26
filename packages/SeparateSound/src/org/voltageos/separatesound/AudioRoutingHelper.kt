@@ -4,65 +4,91 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.AudioProductStrategy
 import android.util.Log
 
 object AudioRoutingHelper {
     private const val TAG = "AudioRoutingHelper"
     private var speakerDevice: AudioDeviceInfo? = null
-    private var mediaStrategy: Any? = null
+    private var mediaStrategy: AudioProductStrategy? = null
 
     fun init(ctx: Context) {
         val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         speakerDevice = findSpeakerDevice(am)
         mediaStrategy = findMediaStrategy(am)
+
+        dumpAudioSystemMethods()
+
         Log.d(TAG, "init: speaker=${speakerDevice != null} strategy=${mediaStrategy != null}")
     }
 
     fun setUidDeviceAffinity(uid: Int, deviceType: Int, address: String): Boolean {
-        return try {
+        val methodName = "setUidDeviceAffinity"
+        try {
             val audioSystemClass = Class.forName("android.media.AudioSystem")
-            val method = audioSystemClass.getMethod(
-                "setUidDeviceAffinity",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                String::class.java
-            )
-            val result = method.invoke(null, uid, deviceType, address) as Int
-            Log.d(TAG, "AudioSystem.setUidDeviceAffinity(uid=$uid, type=$deviceType) -> $result")
-            result == 0
-        } catch (e: Exception) {
-            Log.e(TAG, "AudioSystem.setUidDeviceAffinity failed", e)
-            false
-        }
-    }
+            val methods = audioSystemClass.methods.filter { it.name == methodName }
+            Log.d(TAG, "AudioSystem.$methodName candidates: ${methods.map { it.toGenericString() }}")
 
-    fun removeUidDeviceAffinity(uid: Int): Boolean {
-        return try {
-            val audioSystemClass = Class.forName("android.media.AudioSystem")
             try {
-                val removeMethod = audioSystemClass.getMethod(
-                    "removeUidDeviceAffinity",
-                    Int::class.javaPrimitiveType
-                )
-                val result = removeMethod.invoke(null, uid) as Int
-                Log.d(TAG, "AudioSystem.removeUidDeviceAffinity(uid=$uid) -> $result")
-                result == 0
-            } catch (e1: NoSuchMethodException) {
-                val setMethod = audioSystemClass.getMethod(
-                    "setUidDeviceAffinity",
+                val m = audioSystemClass.getMethod(
+                    methodName,
                     Int::class.javaPrimitiveType,
                     Int::class.javaPrimitiveType,
                     String::class.java
                 )
-                val result = setMethod.invoke(
-                    null, uid, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, ""
-                ) as Int
-                Log.d(TAG, "reset via setUidDeviceAffinity->Speaker -> $result")
-                result == 0
-            }
+                val result = m.invoke(null, uid, deviceType, address) as Int
+                Log.d(TAG, "AudioSystem.$methodName(int,int,String) -> $result")
+                return result == 0
+            } catch (_: NoSuchMethodException) {}
+
+            val deviceInfoClass = Class.forName("android.media.AudioDeviceAttributes")
+            try {
+                val ctor = deviceInfoClass.getConstructor(
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    String::class.java
+                )
+                val deviceAttr = ctor.newInstance(2, deviceType, address)
+                val m = audioSystemClass.getMethod(methodName,
+                    Int::class.javaPrimitiveType, deviceInfoClass)
+                val result = m.invoke(null, uid, deviceAttr) as Int
+                Log.d(TAG, "AudioSystem.$methodName(int,AudioDeviceAttributes) -> $result")
+                return result == 0
+            } catch (_: Exception) {}
+
+            Log.w(TAG, "No working $methodName found")
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "$methodName failed", e)
+            return false
+        }
+    }
+
+    fun removeUidDeviceAffinity(uid: Int): Boolean {
+        try {
+            val audioSystemClass = Class.forName("android.media.AudioSystem")
+            try {
+                val m = audioSystemClass.getMethod("removeUidDeviceAffinity",
+                    Int::class.javaPrimitiveType)
+                val result = m.invoke(null, uid) as Int
+                Log.d(TAG, "removeUidDeviceAffinity(uid=$uid) -> $result")
+                return result == 0
+            } catch (_: NoSuchMethodException) {}
+
+            try {
+                val m = audioSystemClass.getMethod("removeUidDeviceAffinity",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType)
+                val result = m.invoke(null, uid, 0) as Int
+                Log.d(TAG, "removeUidDeviceAffinity(uid,flags) -> $result")
+                return result == 0
+            } catch (_: NoSuchMethodException) {}
+
+            Log.w(TAG, "removeUidDeviceAffinity not found")
+            return false
         } catch (e: Exception) {
             Log.e(TAG, "removeUidDeviceAffinity failed", e)
-            false
+            return false
         }
     }
 
@@ -71,14 +97,7 @@ object AudioRoutingHelper {
             val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val strategy = mediaStrategy ?: findMediaStrategy(am) ?: return false
             val speaker = speakerDevice ?: findSpeakerDevice(am) ?: return false
-
-            val strategyClass = Class.forName("android.media.audiopolicy.AudioProductStrategy")
-            val setPreferred = am.javaClass.getMethod(
-                "setPreferredDeviceForStrategy",
-                strategyClass,
-                AudioDeviceInfo::class.java
-            )
-            val result = setPreferred.invoke(am, strategy, speaker) as? Boolean ?: false
+            val result = am.setPreferredDeviceForStrategy(strategy, speaker)
             Log.d(TAG, "forceDefaultToSpeaker: $result")
             return result
         } catch (e: Exception) {
@@ -91,14 +110,7 @@ object AudioRoutingHelper {
         try {
             val am = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val strategy = mediaStrategy ?: findMediaStrategy(am) ?: return false
-
-            val strategyClass = Class.forName("android.media.audiopolicy.AudioProductStrategy")
-            val setPreferred = am.javaClass.getMethod(
-                "setPreferredDeviceForStrategy",
-                strategyClass,
-                AudioDeviceInfo::class.java
-            )
-            val result = setPreferred.invoke(am, strategy, null) as? Boolean ?: false
+            val result = am.setPreferredDeviceForStrategy(strategy, null)
             Log.d(TAG, "restoreDefaultRouting: $result")
             return result
         } catch (e: Exception) {
@@ -112,34 +124,34 @@ object AudioRoutingHelper {
             .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
     }
 
-    private fun findMediaStrategy(am: AudioManager): Any? {
+    private fun findMediaStrategy(am: AudioManager): AudioProductStrategy? {
         return try {
-            val getStrategies = am.javaClass.getMethod("getAudioProductStrategies")
-            val strategies = getStrategies.invoke(am) as? List<*> ?: return null
-
-            val strategyClass = Class.forName("android.media.audiopolicy.AudioProductStrategy")
-            val getAttrMethod = strategyClass.getMethod("getAudioAttributes")
-
-            for (strategy in strategies) {
-                if (strategy == null) continue
-                val attrsList = getAttrMethod.invoke(strategy) as? List<*> ?: continue
-                for (attrs in attrsList) {
-                    if (attrs is AudioAttributes && attrs.usage == AudioAttributes.USAGE_MEDIA) {
-                        return strategy
-                    }
-                }
-            }
-            strategies.firstOrNull()
+            val strategies = am.audioProductStrategies
+            strategies?.firstOrNull { s ->
+                s.audioAttributes?.any { it.usage == AudioAttributes.USAGE_MEDIA } == true
+            } ?: strategies?.firstOrNull()
         } catch (e: Exception) {
-            Log.w(TAG, "findMediaStrategy failed, trying fallback", e)
-            try {
-                val strategies = (am.javaClass.getMethod("getAudioProductStrategies")
-                    .invoke(am) as? List<*>) ?: return null
-                strategies.firstOrNull()
-            } catch (e2: Exception) {
-                Log.e(TAG, "findMediaStrategy fallback also failed", e2)
-                null
+            Log.w(TAG, "findMediaStrategy failed", e)
+            null
+        }
+    }
+
+    private fun dumpAudioSystemMethods() {
+        try {
+            val cls = Class.forName("android.media.AudioSystem")
+            val methods = cls.methods.filter {
+                it.name.contains("uid", ignoreCase = true)
+                        || it.name.contains("affinity", ignoreCase = true)
+                        || it.name.contains("routing", ignoreCase = true)
             }
+            if (methods.isNotEmpty()) {
+                Log.d(TAG, "AudioSystem relevant methods:")
+                methods.forEach { Log.d(TAG, "  ${it.toGenericString()}") }
+            } else {
+                Log.d(TAG, "No uid/affinity/routing methods found on AudioSystem")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "dumpAudioSystemMethods failed", e)
         }
     }
 }
